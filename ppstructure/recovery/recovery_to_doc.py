@@ -71,6 +71,7 @@ def convert_info_docx(img, res, save_folder, img_name):
                     paragraph_format.first_line_indent = shared.Inches(0.25)
                 text_run = paragraph.add_run(line['text'] + ' ')
                 text_run.font.size = shared.Pt(10)
+                # line['text_region'][0][0]
 
     # save to docx
     docx_path = os.path.join(save_folder, '{}_ocr.docx'.format(img_name))
