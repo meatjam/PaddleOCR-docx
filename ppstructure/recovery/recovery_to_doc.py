@@ -25,6 +25,7 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 from ppstructure.recovery.table_process import HtmlToDocx
 
 from ppocr.utils.logging import get_logger
+
 logger = get_logger()
 
 
@@ -49,7 +50,7 @@ def convert_info_docx(img, res, save_folder, img_name):
         if region['type'].lower() == 'figure':
             excel_save_folder = os.path.join(save_folder, img_name)
             img_path = os.path.join(excel_save_folder,
-                                    '{}_{}.jpg'.format(region['bbox'], img_idx))
+                '{}_{}.jpg'.format(region['bbox'], img_idx))
             paragraph_pic = doc.add_paragraph()
             paragraph_pic.alignment = WD_ALIGN_PARAGRAPH.CENTER
             run = paragraph_pic.add_run("")
@@ -105,7 +106,7 @@ def sorted_layout_boxes(res, w):
             break
         if i == num_boxes - 1:
             if _boxes[i]['bbox'][1] > _boxes[i - 1]['bbox'][3] and _boxes[i][
-                    'bbox'][0] < w / 2 and _boxes[i]['bbox'][2] > w / 2:
+                'bbox'][0] < w / 2 and _boxes[i]['bbox'][2] > w / 2:
                 new_res += res_left
                 new_res += res_right
                 _boxes[i]['layout'] = 'single'

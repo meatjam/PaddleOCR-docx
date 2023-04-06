@@ -199,7 +199,7 @@ def save_structure_res(res, save_folder, img_name, img_idx=0):
             f.write('{}\n'.format(json.dumps(region)))
 
             if region['type'].lower() == 'table' and len(region[
-                    'res']) > 0 and 'html' in region['res']:
+                'res']) > 0 and 'html' in region['res']:
                 excel_path = os.path.join(
                     excel_save_folder,
                     '{}_{}.xlsx'.format(region['bbox'], img_idx))
@@ -231,7 +231,7 @@ def main(args):
             from pdf2docx.converter import Converter
             os.makedirs(args.output, exist_ok=True)
             docx_file = os.path.join(args.output,
-                                     '{}_api.docx'.format(img_name))
+                '{}_api.docx'.format(img_name))
             cv = Converter(image_file)
             cv.convert(docx_file)
             cv.close()
@@ -253,7 +253,7 @@ def main(args):
         for index, img in enumerate(imgs):
             res, time_dict = structure_sys(img, img_idx=index)
             img_save_path = os.path.join(save_folder, img_name,
-                                         'show_{}.jpg'.format(index))
+                'show_{}.jpg'.format(index))
             os.makedirs(os.path.join(save_folder, img_name), exist_ok=True)
             if structure_sys.mode == 'structure' and res != []:
                 draw_img = draw_structure_result(img, res, args.vis_font_path)
@@ -268,7 +268,7 @@ def main(args):
 
                 with open(
                         os.path.join(save_folder, img_name,
-                                     'res_{}_kie.txt'.format(index)),
+                            'res_{}_kie.txt'.format(index)),
                         'w',
                         encoding='utf8') as f:
                     res_str = '{}\t{}\n'.format(
@@ -292,7 +292,7 @@ def main(args):
                 convert_info_docx(img, all_res, save_folder, img_name)
             except Exception as ex:
                 logger.error("error in layout recovery image:{}, err msg: {}".
-                             format(image_file, ex))
+                format(image_file, ex))
                 continue
         logger.info("Predict time : {:.3f}s".format(time_dict['all']))
 
