@@ -14,17 +14,23 @@
 
 import os
 from copy import deepcopy
+from math import floor
+from shapely.geometry import Polygon
 
 from docx import Document
 from docx import shared
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.section import WD_SECTION
+from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
+from docx.enum.section import WD_SECTION_START
 from docx.oxml.ns import qn
 from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.dml.color import ColorFormat, MSO_COLOR_TYPE
+from docx.enum.dml import MSO_THEME_COLOR_INDEX
+from docx.enum.style import WD_STYLE_TYPE
 
 from ppstructure.recovery.table_process import HtmlToDocx
 
 from ppocr.utils.logging import get_logger
+
 
 logger = get_logger()
 
@@ -34,45 +40,93 @@ def convert_info_docx(img, res, save_folder, img_name):
     doc.styles['Normal'].font.name = 'Times New Roman'
     doc.styles['Normal']._element.rPr.rFonts.set(qn('w:eastAsia'), u'宋体')
     doc.styles['Normal'].font.size = shared.Pt(6.5)
+    font_name_title = '宋体'
 
     flag = 1
-    for i, region in enumerate(res):
+    last_bbox_polygon = Polygon([(0, 0), (0, 0), (0, 0), (0, 0)])
+    for region in res:
+        if len(region['res']) == 0:
+            continue
+        left, top, right, bottom = region['bbox']
+        current_bbox_polygon = Polygon([(left, top), (right, top), (right, bottom), (left, bottom), (left, top)])
+        intersection = current_bbox_polygon.intersection(last_bbox_polygon)
+        if not intersection.is_empty:
+            overlap_area = intersection.area / (current_bbox_polygon.area + last_bbox_polygon.area - intersection.area)
+            if overlap_area > 0.8:
+                last_bbox_polygon = current_bbox_polygon
+                continue
+        last_bbox_polygon = current_bbox_polygon
+
         img_idx = region['img_idx']
         if flag == 2 and region['layout'] == 'single':
-            section = doc.add_section(WD_SECTION.CONTINUOUS)
+            section = doc.add_section(WD_SECTION_START.CONTINUOUS)
             section._sectPr.xpath('./w:cols')[0].set(qn('w:num'), '1')
             flag = 1
         elif flag == 1 and region['layout'] == 'double':
-            section = doc.add_section(WD_SECTION.CONTINUOUS)
+            section = doc.add_section(WD_SECTION_START.CONTINUOUS)
             section._sectPr.xpath('./w:cols')[0].set(qn('w:num'), '2')
             flag = 2
 
-        if region['type'].lower() == 'figure':
+        region_type = region['type'].lower()
+        if region_type == 'figure':
             excel_save_folder = os.path.join(save_folder, img_name)
             img_path = os.path.join(excel_save_folder,
                 '{}_{}.jpg'.format(region['bbox'], img_idx))
             paragraph_pic = doc.add_paragraph()
-            paragraph_pic.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            paragraph_pic.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
             run = paragraph_pic.add_run("")
             if flag == 1:
                 run.add_picture(img_path, width=shared.Inches(5))
             elif flag == 2:
                 run.add_picture(img_path, width=shared.Inches(2))
-        elif region['type'].lower() == 'title':
-            doc.add_heading(region['res'][0]['text'])
-        elif region['type'].lower() == 'table':
+        elif region_type == 'title':
+            paragraph = doc.add_heading('\n'.join([r['text'] for r in region['res']]))
+            font = paragraph.style.font
+            font.name = font_name_title
+            func_set_font = paragraph.style.element.rPr.rFonts.set
+            func_set_font(qn('w:eastAsia'), font_name_title)
+            func_set_font(qn("w:asciiTheme"), font_name_title)
+            func_set_font(qn("w:eastAsiaTheme"), font_name_title)
+            font.color.rgb = shared.RGBColor(0x00, 0x00, 0x00)
+            paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+            font.size = shared.Pt(18)
+        elif region_type == 'table':
             parser = HtmlToDocx()
             parser.table_style = 'TableGrid'
             parser.handle_table(region['res']['html'], doc)
+        elif region_type == 'header':
+            paragraph = doc.add_paragraph(''.join([r['text'] for r in region['res']]))
+            paragraph.style.font.size = shared.Pt(14)
+            paragraph.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+        elif region_type == 'footer':
+            section = doc.sections[0]
+            footer = section.footer
+            footer.add_paragraph(''.join([r['text'] for r in region['res']]))
+            # footer.footer_distance = shared.Cm(3)
+            # footer.bottom_margin = shared.Cm(5.0)
+            footer.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
         else:
+            left_top, right_top, right_bottom, left_bottom = region['res'][0]['text_region']
+            cn_word_size = (right_bottom[1] + left_bottom[1]) / 2 - (left_top[1] + right_top[1]) / 2
             paragraph = doc.add_paragraph()
-            paragraph_format = paragraph.paragraph_format
-            for i, line in enumerate(region['res']):
-                if i == 0:
-                    paragraph_format.first_line_indent = shared.Inches(0.25)
-                text_run = paragraph.add_run(line['text'] + ' ')
-                text_run.font.size = shared.Pt(10)
-                # line['text_region'][0][0]
+            paragraph.style.font.size = shared.Pt(14)
+
+            # Find the very left position x of all lines.
+            start_x = 9999
+            for line in region['res']:
+                x = line['text_region'][0][0]
+                if x < start_x:
+                    start_x = x
+
+            for line in region['res']:
+                x = line['text_region'][0][0]
+                indent_word_size = round((x - start_x) / cn_word_size)
+                text = line['text']
+                if indent_word_size > 0:
+                    paragraph.add_run('\n')
+                    indent_text = ''.join(['\t' for i in range(floor(indent_word_size / 2))])
+                    text = f'{indent_text}{text}'
+                paragraph.add_run(text)
 
     # save to docx
     docx_path = os.path.join(save_folder, '{}_ocr.docx'.format(img_name))
